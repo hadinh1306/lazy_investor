@@ -119,12 +119,15 @@ def calculate_dca_returns(
     2. At regular intervals, a fixed amount is withdrawn and invested in an ETF
     3. The investment grows based on actual market performance
 
+    If investment_amount is 0, this simulates a savings-only scenario where
+    no market investments are made and all returns come from savings interest.
+
     Args:
         initial_savings: Initial amount in savings account
         annual_interest_rate: Annual savings interest rate (%)
-        investment_amount: Fixed amount to invest each period
+        investment_amount: Fixed amount to invest each period (can be 0 for savings-only)
         investment_frequency: 'Weekly', 'Biweekly', or 'Monthly'
-        ticker: Stock/ETF ticker symbol
+        ticker: Stock/ETF ticker symbol (ignored if investment_amount is 0)
         start_date: Investment period start date (YYYY-MM-DD)
         end_date: Investment period end date (YYYY-MM-DD)
 
@@ -134,7 +137,7 @@ def calculate_dca_returns(
             - total_invested: Total amount invested in ETF
             - num_investments: Number of investment transactions
             - total_shares: Total ETF shares purchased
-            - final_stock_price: ETF price at end date
+            - final_stock_price: ETF price at end date (0 if no investments)
             - final_portfolio_value: Value of ETF holdings at end
             - final_savings: Remaining savings balance
             - savings_interest_earned: Interest earned on savings
@@ -148,10 +151,12 @@ def calculate_dca_returns(
             - portfolio_value_history: Daily portfolio value history
 
     Raises:
-        ValueError: If stock data cannot be downloaded
+        ValueError: If stock data cannot be downloaded (only when investment_amount > 0)
     """
-    # Download stock data (raises ValueError if fails)
-    stock_data = download_stock_data(ticker, start_date, end_date)
+    # Download stock data only if we're making investments
+    stock_data = None
+    if investment_amount > 0:
+        stock_data = download_stock_data(ticker, start_date, end_date)
 
     # Calculate daily interest rate
     daily_rate = calculate_daily_interest_rate(annual_interest_rate)
@@ -180,27 +185,28 @@ def calculate_dca_returns(
         daily_interest = current_savings * daily_rate
         current_savings += daily_interest
 
-        # Check if it's time to invest
-        days_since_investment += 1
+        # Check if it's time to invest (only if investment_amount > 0)
+        if investment_amount > 0:
+            days_since_investment += 1
 
-        if days_since_investment >= investment_interval and current_savings >= investment_amount:
-            # Make investment
-            stock_price = get_stock_price(stock_data, current_date)
+            if days_since_investment >= investment_interval and current_savings >= investment_amount:
+                # Make investment
+                stock_price = get_stock_price(stock_data, current_date)
 
-            if stock_price is not None:
-                shares_purchased = investment_amount / stock_price
-                total_shares += shares_purchased
-                total_invested += investment_amount
-                current_savings -= investment_amount
+                if stock_price is not None:
+                    shares_purchased = investment_amount / stock_price
+                    total_shares += shares_purchased
+                    total_invested += investment_amount
+                    current_savings -= investment_amount
 
-                investment_dates.append({
-                    'date': current_date,
-                    'price': stock_price,
-                    'shares': shares_purchased,
-                    'amount': investment_amount
-                })
+                    investment_dates.append({
+                        'date': current_date,
+                        'price': stock_price,
+                        'shares': shares_purchased,
+                        'amount': investment_amount
+                    })
 
-                days_since_investment = 0
+                    days_since_investment = 0
 
         # Track savings balance
         savings_history.append({
@@ -208,23 +214,36 @@ def calculate_dca_returns(
             'savings_balance': current_savings
         })
 
-        # Calculate portfolio value
-        current_stock_price = get_stock_price(stock_data, current_date)
-        if current_stock_price is not None:
-            portfolio_value = total_shares * current_stock_price
+        # Calculate portfolio value (only if we have investments)
+        if investment_amount > 0:
+            current_stock_price = get_stock_price(stock_data, current_date)
+            if current_stock_price is not None:
+                portfolio_value = total_shares * current_stock_price
+                portfolio_value_history.append({
+                    'date': current_date,
+                    'portfolio_value': portfolio_value
+                })
+        else:
+            # No investments, portfolio value is always 0
             portfolio_value_history.append({
                 'date': current_date,
-                'portfolio_value': portfolio_value
+                'portfolio_value': 0
             })
 
     # Final calculations
-    final_stock_price = get_stock_price(stock_data, date_range[-1])
+    if investment_amount > 0:
+        final_stock_price = get_stock_price(stock_data, date_range[-1])
 
-    # If final price is None, get the last available price from the stock data
-    if final_stock_price is None:
-        final_stock_price = stock_data['Close'].iloc[-1]
+        # If final price is None, get the last available price from the stock data
+        if final_stock_price is None:
+            final_stock_price = stock_data['Close'].iloc[-1]
 
-    final_portfolio_value = total_shares * final_stock_price
+        final_portfolio_value = total_shares * final_stock_price
+    else:
+        # Savings-only scenario
+        final_stock_price = 0
+        final_portfolio_value = 0
+
     final_savings = current_savings
 
     # Calculate savings interest earned
