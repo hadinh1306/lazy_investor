@@ -48,7 +48,7 @@ def display_main_interface():
         initial_savings = st.number_input(
             "Initial Savings Amount ($)",
             min_value=0.0,
-            value=26000.0,
+            value=31560.0,
             step=1000.0,
             format="%.2f",
             help="Starting balance in your savings account"
@@ -92,59 +92,137 @@ def display_main_interface():
             help="End date for investment period"
         )
 
-        ticker = st.text_input(
-            "ETF Ticker Symbol",
-            value="VFV.TO",
-            help="Stock/ETF ticker symbol (ignored if investment amount is 0)"
-        )
+        st.markdown("**Portfolio Structure**")
+        st.caption("Add tickers and their allocation percentages. Total must equal 100%.")
+
+        # Initialize portfolio structure in session state
+        if 'portfolio_structure' not in st.session_state:
+            st.session_state['portfolio_structure'] = [
+                {'ticker': 'VTI', 'percentage': 30.0},
+                {'ticker': 'QCN.TO', 'percentage': 21.0},
+                {'ticker': 'IEFA', 'percentage': 17.0},
+                {'ticker': 'GLOV', 'percentage': 11.0},
+                {'ticker': 'ZCB.TO', 'percentage': 4.0},
+                {'ticker': 'ZUAG.TO', 'percentage': 4.0},
+                {'ticker': 'EEMV', 'percentage': 4.0},
+                {'ticker': 'ZAG.TO', 'percentage': 5.0},
+                {'ticker': 'GLDM', 'percentage': 3.0},
+                {'ticker': 'ZHY.TO', 'percentage': 1.0}
+            ]
+
+        # Display existing tickers
+        portfolio_structure = []
+        total_percentage = 0.0
+
+        for idx, item in enumerate(st.session_state['portfolio_structure']):
+            col1, col2, col3 = st.columns([2, 1, 0.5])
+
+            with col1:
+                ticker = st.text_input(
+                    f"Ticker {idx + 1}",
+                    value=item['ticker'],
+                    key=f"ticker_{idx}",
+                    label_visibility="collapsed"
+                )
+
+            with col2:
+                percentage = st.number_input(
+                    f"% {idx + 1}",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=item['percentage'],
+                    step=1.0,
+                    format="%.1f",
+                    key=f"percentage_{idx}",
+                    label_visibility="collapsed"
+                )
+
+            with col3:
+                if len(st.session_state['portfolio_structure']) > 1:
+                    if st.button("🗑️", key=f"delete_{idx}", help="Remove ticker"):
+                        st.session_state['portfolio_structure'].pop(idx)
+                        st.rerun()
+
+            portfolio_structure.append({'ticker': ticker, 'percentage': percentage})
+            total_percentage += percentage
+
+        # Update session state with current values
+        st.session_state['portfolio_structure'] = portfolio_structure
+
+        # Add new ticker button
+        if st.button("➕ Add Ticker", use_container_width=True):
+            st.session_state['portfolio_structure'].append({'ticker': '', 'percentage': 0.0})
+            st.rerun()
+
+        # Show total percentage (only validate if making investments)
+        if investment_amount > 0:
+            if total_percentage > 100.0:
+                st.error(f"⚠️ Total allocation: {total_percentage:.1f}% (exceeds 100%)")
+            elif total_percentage == 100.0:
+                st.success(f"✅ Total allocation: {total_percentage:.1f}%")
+            else:
+                st.warning(f"⚠️ Total allocation: {total_percentage:.1f}% (must equal 100%)")
+        else:
+            st.info("ℹ️ Savings-only mode (no portfolio allocation needed)")
 
         # Calculate button
         col1, col2 = st.columns([1, 1])
 
         with col1:
             if st.button("Calculate & Save", type="primary", use_container_width=True):
-                if initial_savings > 0:
-                    if not scenario_name:
-                        st.warning("Please enter a scenario name")
-                    elif scenario_name in st.session_state['saved_scenarios']:
-                        st.warning("Scenario name already exists. Choose a different name.")
-                    else:
-                        with st.spinner("Calculating your DCA returns..."):
-                            try:
-                                results = calculate_dca_returns(
-                                    initial_savings=initial_savings,
-                                    annual_interest_rate=annual_interest_rate,
-                                    investment_amount=investment_amount,
-                                    investment_frequency=investment_frequency,
-                                    ticker=ticker,
-                                    start_date=start_date.strftime('%Y-%m-%d'),
-                                    end_date=end_date.strftime('%Y-%m-%d')
-                                )
-
-                                # Save scenario immediately
-                                save_scenario(scenario_name, results, {
-                                    'initial_savings': initial_savings,
-                                    'investment_amount': investment_amount,
-                                    'investment_frequency': investment_frequency,
-                                    'annual_interest_rate': annual_interest_rate,
-                                    'start_date': start_date.strftime('%Y-%m-%d'),
-                                    'end_date': end_date.strftime('%Y-%m-%d'),
-                                    'ticker': ticker
-                                })
-
-                                # Store as current results
-                                st.session_state['current_results'] = results
-                                st.session_state['current_scenario_name'] = scenario_name
-
-                                st.success(f"✅ Saved: {scenario_name}")
-                                st.rerun()
-
-                            except ValueError as e:
-                                st.error(str(e))
-                            except Exception as e:
-                                st.error(f"An error occurred: {str(e)}")
-                else:
+                # Validation
+                if initial_savings <= 0:
                     st.warning("Please enter a valid initial savings amount.")
+                elif not scenario_name:
+                    st.warning("Please enter a scenario name")
+                elif scenario_name in st.session_state['saved_scenarios']:
+                    st.warning("Scenario name already exists. Choose a different name.")
+                elif investment_amount > 0 and total_percentage != 100.0:
+                    st.warning(f"Portfolio allocation must equal 100%. Current total: {total_percentage:.1f}%")
+                elif investment_amount > 0 and any(not item['ticker'].strip() for item in portfolio_structure if item['percentage'] > 0):
+                    st.warning("All tickers with non-zero allocation must have a valid symbol")
+                else:
+                    with st.spinner("Calculating your DCA returns..."):
+                        try:
+                            # Convert portfolio structure to dict format (only tickers with allocation)
+                            portfolio_dict = {
+                                item['ticker'].strip(): item['percentage'] / 100.0
+                                for item in portfolio_structure
+                                if item['ticker'].strip() and item['percentage'] > 0
+                            }
+
+                            results = calculate_dca_returns(
+                                initial_savings=initial_savings,
+                                annual_interest_rate=annual_interest_rate,
+                                investment_amount=investment_amount,
+                                investment_frequency=investment_frequency,
+                                portfolio_structure=portfolio_dict,
+                                start_date=start_date.strftime('%Y-%m-%d'),
+                                end_date=end_date.strftime('%Y-%m-%d')
+                            )
+
+                            # Save scenario immediately
+                            save_scenario(scenario_name, results, {
+                                'initial_savings': initial_savings,
+                                'investment_amount': investment_amount,
+                                'investment_frequency': investment_frequency,
+                                'annual_interest_rate': annual_interest_rate,
+                                'start_date': start_date.strftime('%Y-%m-%d'),
+                                'end_date': end_date.strftime('%Y-%m-%d'),
+                                'portfolio_structure': portfolio_dict
+                            })
+
+                            # Store as current results
+                            st.session_state['current_results'] = results
+                            st.session_state['current_scenario_name'] = scenario_name
+
+                            st.success(f"✅ Saved: {scenario_name}")
+                            st.rerun()
+
+                        except ValueError as e:
+                            st.error(str(e))
+                        except Exception as e:
+                            st.error(f"An error occurred: {str(e)}")
 
         with col2:
             if st.session_state.get('saved_scenarios'):
@@ -185,13 +263,17 @@ def display_scenario_comparison(saved_scenarios: dict):
         results = scenario['results']
         params = scenario['params']
 
+        # Format portfolio structure for display
+        portfolio_str = ", ".join([f"{ticker} ({pct*100:.0f}%)"
+                                   for ticker, pct in params['portfolio_structure'].items()])
+
         comparison_data.append({
             'Scenario': name,
             'Initial': f"${results['initial_savings']:,.0f}",
             'Frequency': params['investment_frequency'],
             'Amount/Period': f"${params['investment_amount']:,.0f}",
             'Interest': f"{params['annual_interest_rate']}%",
-            'Ticker': params['ticker'],
+            'Portfolio': portfolio_str,
             'Final Value': f"${results['total_final_value']:,.0f}",
             'Total Return': f"${results['total_return']:,.0f}",
             'Return Rate': f"{results['return_rate']:.1f}%"
@@ -242,17 +324,20 @@ def display_scenario_comparison(saved_scenarios: dict):
 
             - **Date**: The calendar date (YYYY-MM-DD format)
             - **Scenario**: The scenario name
+            - **Portfolio Structure**: Dictionary showing ticker allocations (e.g., `{'VFV.TO': 0.4, 'QCN': 0.2}`)
             - **Savings Balance**: Current balance in savings account
             - **Daily Interest Earned**: Interest earned on that specific day
             - **Cumulative Interest Earned**: Total interest earned since start
-            - **Investment Made**: Amount invested on that day (0 if no investment)
-            - **Stock Price**: Stock price on that day (null for weekends/holidays)
-            - **Shares Purchased**: Number of shares bought that day (0 if no investment)
-            - **Total Shares Owned**: Cumulative shares owned
-            - **Portfolio Value**: Current value of all shares owned
+            - **Investment Made**: Total amount invested on that day across all tickers (0 if no investment)
+            - **Stock Prices**: Dictionary of stock prices for each ticker on that day (null for weekends/holidays)
+            - **Shares Purchased**: Dictionary of shares bought for each ticker that day (0 if no investment)
+            - **Total Shares Owned**: Dictionary of cumulative shares owned for each ticker
+            - **Portfolio Value**: Current value of all shares owned across all tickers
             - **Total Final Value**: Savings Balance + Portfolio Value
             - **Total Return**: Total Final Value - Initial Savings
             - **Return Rate (%)**: (Total Return / Initial Savings) × 100
+
+            **Note**: Partial shares can be purchased. Dictionary columns are formatted as Python dict strings for easy parsing.
             """)
 
         # Generate and offer CSV download
@@ -348,10 +433,15 @@ def generate_csv_data(saved_scenarios: dict, selected_scenarios: list) -> str:
         investment_lookup = {}
         for inv in results['investment_dates']:
             inv_date = pd.to_datetime(inv['date'])
+            # Sum up all allocations for this date
+            total_amount = inv.get('total_amount', 0)
+            # Store allocation details - we'll use the first ticker's price as representative
+            # (in reality, each ticker has its own price)
+            allocations = inv.get('allocations', {})
+
             investment_lookup[inv_date] = {
-                'amount': inv['amount'],
-                'price': inv['price'],
-                'shares': inv['shares']
+                'amount': total_amount,
+                'allocations': allocations
             }
 
         # Merge the dataframes
@@ -377,15 +467,40 @@ def generate_csv_data(saved_scenarios: dict, selected_scenarios: list) -> str:
         combined_df['investment_made'] = combined_df['date'].apply(
             lambda d: investment_lookup[d]['amount'] if d in investment_lookup else 0
         )
-        combined_df['stock_price'] = combined_df['date'].apply(
-            lambda d: investment_lookup[d]['price'] if d in investment_lookup else None
-        )
-        combined_df['shares_purchased'] = combined_df['date'].apply(
-            lambda d: investment_lookup[d]['shares'] if d in investment_lookup else 0
-        )
+
+        # For portfolio structure, we'll show stock prices and shares as JSON/dict format
+        def get_stock_prices(date):
+            if date in investment_lookup and investment_lookup[date]['allocations']:
+                return str({ticker: alloc['price']
+                           for ticker, alloc in investment_lookup[date]['allocations'].items()})
+            return None
+
+        def get_shares_purchased(date):
+            if date in investment_lookup and investment_lookup[date]['allocations']:
+                return str({ticker: alloc['shares']
+                           for ticker, alloc in investment_lookup[date]['allocations'].items()})
+            return None
+
+        def get_total_shares_owned(shares_dict_str):
+            """Parse shares purchased strings and accumulate totals"""
+            if not shares_dict_str or shares_dict_str == 'None':
+                return cumulative_shares_str
+            try:
+                import ast
+                shares_dict = ast.literal_eval(shares_dict_str)
+                for ticker, shares in shares_dict.items():
+                    cumulative_shares[ticker] = cumulative_shares.get(ticker, 0.0) + shares
+                return str(cumulative_shares)
+            except:
+                return cumulative_shares_str
+
+        combined_df['stock_prices'] = combined_df['date'].apply(get_stock_prices)
+        combined_df['shares_purchased'] = combined_df['date'].apply(get_shares_purchased)
 
         # Calculate cumulative shares owned
-        combined_df['total_shares_owned'] = combined_df['shares_purchased'].cumsum()
+        cumulative_shares = {}
+        cumulative_shares_str = str(cumulative_shares)
+        combined_df['total_shares_owned'] = combined_df['shares_purchased'].apply(get_total_shares_owned)
 
         # Calculate total final value and total return for each day
         combined_df['total_final_value'] = combined_df['savings_balance'] + combined_df['portfolio_value']
@@ -395,15 +510,20 @@ def generate_csv_data(saved_scenarios: dict, selected_scenarios: list) -> str:
         # Add scenario name
         combined_df['scenario'] = name
 
+        # Add portfolio structure as a column
+        portfolio_structure_str = str(params['portfolio_structure'])
+        combined_df['portfolio_structure'] = portfolio_structure_str
+
         # Select and reorder columns for CSV
         csv_df = combined_df[[
             'date',
             'scenario',
+            'portfolio_structure',
             'savings_balance',
             'daily_interest_earned',
             'cumulative_interest_earned',
             'investment_made',
-            'stock_price',
+            'stock_prices',
             'shares_purchased',
             'total_shares_owned',
             'portfolio_value',
@@ -416,11 +536,12 @@ def generate_csv_data(saved_scenarios: dict, selected_scenarios: list) -> str:
         csv_df = csv_df.rename(columns={
             'date': 'Date',
             'scenario': 'Scenario',
+            'portfolio_structure': 'Portfolio Structure',
             'savings_balance': 'Savings Balance',
             'daily_interest_earned': 'Daily Interest Earned',
             'cumulative_interest_earned': 'Cumulative Interest Earned',
             'investment_made': 'Investment Made',
-            'stock_price': 'Stock Price',
+            'stock_prices': 'Stock Prices',
             'shares_purchased': 'Shares Purchased',
             'total_shares_owned': 'Total Shares Owned',
             'portfolio_value': 'Portfolio Value',

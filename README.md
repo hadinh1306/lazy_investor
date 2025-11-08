@@ -31,6 +31,11 @@ This approach offers several benefits:
 
 ## ✨ Features
 
+- **Portfolio diversification support**:
+  - Invest in multiple ETFs/stocks with custom allocation percentages
+  - Unlimited tickers per portfolio
+  - Automatic rebalancing on each investment
+  - **Supports partial share purchases** for precise allocation
 - **Daily-compounded savings interest** calculation
 - **Real market data** from Yahoo Finance (supports any stock/ETF ticker)
 - **Flexible investment schedules** (twice a week, weekly, every two weeks, monthly)
@@ -46,8 +51,8 @@ This approach offers several benefits:
   - Return rate percentage
 - **Detailed CSV export** with daily breakdown including:
   - Daily and cumulative interest earned
-  - Investment transactions and share purchases
-  - Portfolio value tracking
+  - Investment transactions and share purchases per ticker
+  - Portfolio value tracking across all holdings
   - Complete return calculations
 - **Interactive UI** built with Streamlit and Plotly
 
@@ -124,7 +129,7 @@ The app will open in your default browser at `http://localhost:8501`
 ## 📊 How to Use
 
 1. **Enter your investment parameters:**
-   - **Scenario Name**: Give your strategy a memorable name (e.g., "Weekly $500 DCA")
+   - **Scenario Name**: Give your strategy a memorable name (e.g., "Weekly $500 Diversified")
    - **Initial Savings Amount**: Your lump sum to invest
    - **Annual Savings Interest Rate**: Interest rate on your savings account (compounded daily)
    - **Investment Amount per Period**: Fixed amount to invest each period (set to 0 for savings-only)
@@ -134,9 +139,16 @@ The app will open in your default browser at `http://localhost:8501`
      - Every two weeks (every 14 days)
      - Monthly (every 30 days)
    - **Period Start/End Date**: Investment timeframe
-   - **ETF Ticker Symbol**: Stock/ETF to invest in (e.g., VFV.TO, SPY, QQQ)
+   - **Portfolio Structure**: Build your diversified portfolio
+     - Add unlimited tickers using the "➕ Add Ticker" button
+     - Assign allocation percentage to each ticker
+     - Percentages must total 100%
+     - Example: VFV.TO (40%), QCN (20%), IEFA (20%), EEMV (20%)
+     - **Note**: Partial shares are supported and will be purchased automatically
 
 2. **Click "Calculate & Save"** to run the simulation and save the scenario
+   - The app will validate that your portfolio allocations total 100%
+   - Stock data will be downloaded for all tickers in your portfolio
 
 3. **Compare scenarios:**
    - View all saved scenarios in a side-by-side comparison table
@@ -146,45 +158,62 @@ The app will open in your default browser at `http://localhost:8501`
 
 4. **Download detailed data:**
    - Click "Download CSV" to export daily breakdown for selected scenarios
-   - CSV includes 13 columns with comprehensive metrics:
+   - CSV includes 14 columns with comprehensive metrics:
+     - Portfolio structure (allocation percentages)
      - Daily interest earned, cumulative interest
-     - Investment transactions, share purchases
-     - Portfolio value, total returns, return rates
+     - Investment transactions across all tickers
+     - Share purchases per ticker (supports partial shares)
+     - Portfolio value aggregated across holdings
+     - Total returns and return rates
+   - Dictionary columns (Stock Prices, Shares Purchased, Total Shares Owned) show data per ticker
    - Use the expandable info section to see column definitions
 
 ## 📈 Example Use Case
 
-**Scenario:** You receive a $26,000 tax return and want to invest it in VFV.TO (Vanguard S&P 500 ETF). You're considering different DCA strategies.
+**Scenario:** You receive a $26,000 tax return and want to invest it using DCA. You're considering both investment frequency and portfolio diversification strategies.
 
 **Compare multiple strategies:**
 
-1. **"Weekly $500"**
+1. **"Weekly $500 - 100% VFV"**
    - Park money in 2.5% APY savings account
-   - Invest $500 every week into VFV.TO
+   - Invest $500 every week
+   - Portfolio: 100% VFV.TO (S&P 500)
    - Period: 2025-01-01 to 2025-10-31
 
-2. **"Twice a week $250"**
+2. **"Weekly $500 - Diversified"**
    - Same savings account (2.5% APY)
-   - Invest $250 twice a week into VFV.TO
+   - Invest $500 every week
+   - Portfolio: VFV.TO 40%, QCN 20%, IEFA 20%, EEMV 20%
    - Same period
+   - Each week: $200 → VFV.TO, $100 → QCN, $100 → IEFA, $100 → EEMV
 
-3. **"Every two weeks $1000"**
-   - Same savings account (2.5% APY)
-   - Invest $1,000 every two weeks into VFV.TO
+3. **"Twice a week $250 - Diversified"**
+   - Same savings account and portfolio allocation
+   - Invest $250 twice a week (more frequent, smaller amounts)
    - Same period
 
 **What the calculator shows:**
 
-- **Comparison table**: Side-by-side metrics for all three strategies
+- **Comparison table**: Side-by-side metrics for all three strategies, including portfolio composition
 - **Best performer**: Automatically highlights which strategy has the highest return rate
 - **Visual comparison**: Interactive line chart showing how total value evolves over time for each strategy
 - **Detailed insights**:
   - How much interest you earned on savings for each strategy
-  - How many shares you accumulated at different prices
+  - How many shares you accumulated for each ticker at different prices (partial shares supported)
+  - Whether diversification improved or reduced returns
+  - Impact of investment frequency on final returns
   - Your total return combining both savings interest and investment gains
-  - Daily breakdown via CSV export for deeper analysis
+  - Daily breakdown via CSV export for deeper analysis, including per-ticker allocation details
 
-This allows you to make an informed decision based on actual market data rather than just theory.
+This allows you to make an informed decision about both **when** to invest (frequency) and **what** to invest in (diversification) based on actual market data rather than just theory.
+
+### Key Insights from Portfolio Structure
+
+By comparing concentrated vs. diversified portfolios, you can answer questions like:
+- Does diversification reduce volatility in my returns?
+- Which asset allocation performs best during my investment period?
+- How much does adding international exposure (IEFA) or emerging markets (EEMV) affect returns?
+- Is the complexity of managing multiple tickers worth the potential benefits?
 
 ## 🛠️ Dependencies
 

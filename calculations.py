@@ -108,38 +108,47 @@ def calculate_dca_returns(
     annual_interest_rate: float,
     investment_amount: float,
     investment_frequency: str,
-    ticker: str,
+    portfolio_structure: dict,
     start_date: str,
     end_date: str
 ) -> dict:
     """
-    Calculate returns from DCA strategy with daily-compounded savings.
+    Calculate returns from DCA strategy with daily-compounded savings and portfolio allocation.
 
     This function simulates a dollar-cost averaging investment strategy where:
     1. Money sits in a savings account earning daily compound interest
-    2. At regular intervals, a fixed amount is withdrawn and invested in an ETF
-    3. The investment grows based on actual market performance
+    2. At regular intervals, a fixed amount is withdrawn and invested across multiple ETFs
+    3. Investment is split according to portfolio allocation percentages
+    4. The investment grows based on actual market performance
+    5. Partial shares can be purchased
 
-    If investment_amount is 0, this simulates a savings-only scenario where
-    no market investments are made and all returns come from savings interest.
+    Use Cases:
+    - Savings only: Set investment_amount = 0, portfolio_structure can be empty dict
+    - Lump sum investment: Set initial_savings = lump_sum, investment_amount = lump_sum,
+                           and ensure only one investment period fits in date range
+    - DCA from savings: Set initial_savings > 0, investment_amount > 0
+    - Single ticker: portfolio_structure = {'TICKER': 1.0}
+    - Multi-ticker: portfolio_structure = {'TICKER1': 0.4, 'TICKER2': 0.6, ...}
 
     Args:
         initial_savings: Initial amount in savings account
         annual_interest_rate: Annual savings interest rate (%)
         investment_amount: Fixed amount to invest each period (can be 0 for savings-only)
-        investment_frequency: 'Weekly', 'Biweekly', or 'Monthly'
-        ticker: Stock/ETF ticker symbol (ignored if investment_amount is 0)
+        investment_frequency: 'Twice a week', 'Weekly', 'Every two weeks', or 'Monthly'
+        portfolio_structure: Dict mapping ticker symbols to allocation percentages (as decimals)
+                           Example: {'VFV.TO': 0.4, 'QCN': 0.2, 'IEFA': 0.2, 'EEMV': 0.2}
+                           Must sum to 1.0 (100%). Can be empty if investment_amount = 0.
         start_date: Investment period start date (YYYY-MM-DD)
         end_date: Investment period end date (YYYY-MM-DD)
 
     Returns:
         dict: Contains all calculation results including:
             - initial_savings: Starting savings amount
-            - total_invested: Total amount invested in ETF
+            - total_invested: Total amount invested across all ETFs
             - num_investments: Number of investment transactions
-            - total_shares: Total ETF shares purchased
-            - final_stock_price: ETF price at end date (0 if no investments)
-            - final_portfolio_value: Value of ETF holdings at end
+            - total_shares: Dict of total shares purchased per ticker
+            - final_stock_prices: Dict of ETF prices at end date
+            - final_portfolio_value: Value of all ETF holdings at end
             - final_savings: Remaining savings balance
             - savings_interest_earned: Interest earned on savings
             - total_final_value: Total value (savings + investments)
@@ -152,12 +161,21 @@ def calculate_dca_returns(
             - portfolio_value_history: Daily portfolio value history
 
     Raises:
-        ValueError: If stock data cannot be downloaded (only when investment_amount > 0)
+        ValueError: If stock data cannot be downloaded or if portfolio_structure is invalid
     """
-    # Download stock data only if we're making investments
-    stock_data = None
+    # Validate portfolio structure
     if investment_amount > 0:
-        stock_data = download_stock_data(ticker, start_date, end_date)
+        if not portfolio_structure:
+            raise ValueError("Portfolio structure cannot be empty when investment_amount > 0")
+
+        total_allocation = sum(portfolio_structure.values())
+        if not (0.99 <= total_allocation <= 1.01):  # Allow small floating point errors
+            raise ValueError(f"Portfolio allocations must sum to 100%. Current sum: {total_allocation*100:.1f}%")
+    # Download stock data for all tickers if we're making investments
+    stock_data_dict = {}
+    if investment_amount > 0:
+        for ticker in portfolio_structure.keys():
+            stock_data_dict[ticker] = download_stock_data(ticker, start_date, end_date)
 
     # Calculate daily interest rate
     daily_rate = calculate_daily_interest_rate(annual_interest_rate)
@@ -167,7 +185,8 @@ def calculate_dca_returns(
 
     # Initialize tracking variables
     current_savings = initial_savings
-    total_shares = 0.0
+    total_shares_dict = {ticker: 0.0 for ticker in portfolio_structure.keys()}  # Shares per ticker
+    last_known_price_dict = {ticker: 0.0 for ticker in portfolio_structure.keys()}  # Last known price per ticker
     total_invested = 0.0
     investment_dates = []
     savings_history = []
@@ -192,22 +211,39 @@ def calculate_dca_returns(
             days_since_investment += 1
 
             if days_since_investment >= investment_interval and current_savings >= investment_amount:
-                # Make investment
-                stock_price = get_stock_price(stock_data, current_date)
+                # Make investments across all tickers in portfolio
+                investment_record = {
+                    'date': current_date,
+                    'total_amount': investment_amount,
+                    'allocations': {}
+                }
 
-                if stock_price is not None:
-                    shares_purchased = investment_amount / stock_price
-                    total_shares += shares_purchased
+                can_invest = True
+                # Check if all tickers have prices available
+                for ticker in portfolio_structure.keys():
+                    stock_price = get_stock_price(stock_data_dict[ticker], current_date)
+                    if stock_price is None:
+                        can_invest = False
+                        break
+
+                if can_invest:
+                    # Invest in each ticker according to allocation
+                    for ticker, allocation in portfolio_structure.items():
+                        ticker_investment = investment_amount * allocation
+                        stock_price = get_stock_price(stock_data_dict[ticker], current_date)
+                        shares_purchased = ticker_investment / stock_price
+                        total_shares_dict[ticker] += shares_purchased
+
+                        investment_record['allocations'][ticker] = {
+                            'amount': ticker_investment,
+                            'price': stock_price,
+                            'shares': shares_purchased
+                        }
+
+                    # Deduct full investment amount from savings
                     total_invested += investment_amount
                     current_savings -= investment_amount
-
-                    investment_dates.append({
-                        'date': current_date,
-                        'price': stock_price,
-                        'shares': shares_purchased,
-                        'amount': investment_amount
-                    })
-
+                    investment_dates.append(investment_record)
                     days_since_investment = 0
 
         # Track savings balance
@@ -218,11 +254,22 @@ def calculate_dca_returns(
 
         # Calculate portfolio value (only if we have investments)
         if investment_amount > 0:
-            current_stock_price = get_stock_price(stock_data, current_date)
-            if current_stock_price is not None:
-                # Trading day - update portfolio value
-                portfolio_value = total_shares * current_stock_price
-            # If no stock price available (weekend/holiday), portfolio_value remains unchanged from previous day
+            # Calculate total portfolio value across all tickers with ticker-level forward-filling
+            current_portfolio_value = 0.0
+
+            for ticker, shares in total_shares_dict.items():
+                if shares > 0:
+                    current_stock_price = get_stock_price(stock_data_dict[ticker], current_date)
+
+                    # Update last known price if we have a current price (trading day for this ticker)
+                    if current_stock_price is not None:
+                        last_known_price_dict[ticker] = current_stock_price
+
+                    # Use last known price for this ticker (forward-fill at ticker level)
+                    ticker_value = shares * last_known_price_dict[ticker]
+                    current_portfolio_value += ticker_value
+
+            portfolio_value = current_portfolio_value
 
             portfolio_value_history.append({
                 'date': current_date,
@@ -237,16 +284,22 @@ def calculate_dca_returns(
 
     # Final calculations
     if investment_amount > 0:
-        final_stock_price = get_stock_price(stock_data, date_range[-1])
+        # Get final prices for all tickers
+        final_stock_prices = {}
+        final_portfolio_value = 0.0
 
-        # If final price is None, get the last available price from the stock data
-        if final_stock_price is None:
-            final_stock_price = stock_data['Close'].iloc[-1]
+        for ticker, shares in total_shares_dict.items():
+            final_price = get_stock_price(stock_data_dict[ticker], date_range[-1])
 
-        final_portfolio_value = total_shares * final_stock_price
+            # If final price is None, get the last available price from the stock data
+            if final_price is None:
+                final_price = stock_data_dict[ticker]['Close'].iloc[-1]
+
+            final_stock_prices[ticker] = final_price
+            final_portfolio_value += shares * final_price
     else:
         # Savings-only scenario
-        final_stock_price = 0
+        final_stock_prices = {}
         final_portfolio_value = 0
 
     final_savings = current_savings
@@ -269,8 +322,8 @@ def calculate_dca_returns(
         'initial_savings': initial_savings,
         'total_invested': total_invested,
         'num_investments': len(investment_dates),
-        'total_shares': total_shares,
-        'final_stock_price': final_stock_price,
+        'total_shares': total_shares_dict,
+        'final_stock_prices': final_stock_prices,
         'final_portfolio_value': final_portfolio_value,
         'final_savings': final_savings,
         'savings_interest_earned': savings_interest_earned,
