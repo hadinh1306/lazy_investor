@@ -33,14 +33,23 @@ This approach offers several benefits:
 
 - **Daily-compounded savings interest** calculation
 - **Real market data** from Yahoo Finance (supports any stock/ETF ticker)
-- **Flexible investment schedules** (weekly, biweekly, monthly)
+- **Flexible investment schedules** (twice a week, weekly, every two weeks, monthly)
+- **Multi-scenario comparison**:
+  - Save unlimited investment scenarios
+  - Compare scenarios side-by-side in a summary table
+  - Interactive line chart showing total value over time
+  - Identify best-performing strategy automatically
 - **Comprehensive return metrics**:
   - Total portfolio return (savings + investments)
   - Investment-only return
   - Savings interest earned
-  - Simple return rate over the period
-- **Investment history tracking** showing every purchase date, price, and shares
-- **Interactive UI** built with Streamlit
+  - Return rate percentage
+- **Detailed CSV export** with daily breakdown including:
+  - Daily and cumulative interest earned
+  - Investment transactions and share purchases
+  - Portfolio value tracking
+  - Complete return calculations
+- **Interactive UI** built with Streamlit and Plotly
 
 ## 📁 Project Structure
 
@@ -58,14 +67,16 @@ lazy_investor/
 ### Code Organization
 
 **`main.py`** - Visualization Layer
-- User input forms
-- Results display (metrics, tables, breakdowns)
+- User input forms and scenario management
+- Interactive Plotly charts for multi-scenario comparison
+- CSV export functionality with detailed daily breakdowns
 - Streamlit app layout and UI components
 
 **`calculations.py`** - Business Logic
 - `download_stock_data()` - Fetches ETF/stock data from Yahoo Finance
 - `calculate_dca_returns()` - Simulates DCA strategy with daily compounding
 - Helper functions for interest rates, stock prices, and date handling
+- Handles non-trading days (weekends/holidays) by forward-filling portfolio values
 
 This separation keeps the visualization code clean and makes the calculation logic reusable and testable.
 
@@ -112,41 +123,75 @@ The app will open in your default browser at `http://localhost:8501`
 
 ## 📊 How to Use
 
-1. **Enter your parameters:**
-   - Initial Savings Amount: Your lump sum to invest
-   - Annual Savings Interest Rate: Interest rate on your savings account (compounded daily)
-   - Investment Amount per Period: Fixed amount to invest each period
-   - Investment Frequency: How often you invest (weekly/biweekly/monthly)
-   - Period Start/End Date: Investment timeframe
-   - ETF Ticker Symbol: Stock/ETF to invest in (e.g., VFV.TO, SPY, QQQ)
+1. **Enter your investment parameters:**
+   - **Scenario Name**: Give your strategy a memorable name (e.g., "Weekly $500 DCA")
+   - **Initial Savings Amount**: Your lump sum to invest
+   - **Annual Savings Interest Rate**: Interest rate on your savings account (compounded daily)
+   - **Investment Amount per Period**: Fixed amount to invest each period (set to 0 for savings-only)
+   - **Investment Frequency**: Choose from:
+     - Twice a week (every 3.5 days)
+     - Weekly (every 7 days)
+     - Every two weeks (every 14 days)
+     - Monthly (every 30 days)
+   - **Period Start/End Date**: Investment timeframe
+   - **ETF Ticker Symbol**: Stock/ETF to invest in (e.g., VFV.TO, SPY, QQQ)
 
-2. **Click "Calculate Returns"** to run the simulation
+2. **Click "Calculate & Save"** to run the simulation and save the scenario
 
-3. **Review the results:**
-   - Summary metrics showing total returns and return rate
-   - Detailed breakdown of savings vs. investment performance
-   - Complete investment history with dates and prices
+3. **Compare scenarios:**
+   - View all saved scenarios in a side-by-side comparison table
+   - See which scenario has the best return rate (highlighted automatically)
+   - Select scenarios using checkboxes to visualize on the interactive chart
+   - Compare total value over time across multiple strategies
+
+4. **Download detailed data:**
+   - Click "Download CSV" to export daily breakdown for selected scenarios
+   - CSV includes 13 columns with comprehensive metrics:
+     - Daily interest earned, cumulative interest
+     - Investment transactions, share purchases
+     - Portfolio value, total returns, return rates
+   - Use the expandable info section to see column definitions
 
 ## 📈 Example Use Case
 
-**Scenario:** You receive a $26,000 tax return and want to invest it in VFV.TO (Vanguard S&P 500 ETF).
+**Scenario:** You receive a $26,000 tax return and want to invest it in VFV.TO (Vanguard S&P 500 ETF). You're considering different DCA strategies.
 
-**Strategy:**
-- Park the money in a 4.5% APY savings account
-- Invest $500 every week into VFV.TO
-- Run for the full year (2024-01-01 to 2024-12-31)
+**Compare multiple strategies:**
 
-**The calculator shows:**
-- How much interest you earned on your savings
-- How many shares you accumulated at different prices
-- Your total return combining both savings interest and investment gains
-- Whether this strategy outperformed a lump sum investment
+1. **"Weekly $500"**
+   - Park money in 2.5% APY savings account
+   - Invest $500 every week into VFV.TO
+   - Period: 2025-01-01 to 2025-10-31
+
+2. **"Twice a week $250"**
+   - Same savings account (2.5% APY)
+   - Invest $250 twice a week into VFV.TO
+   - Same period
+
+3. **"Every two weeks $1000"**
+   - Same savings account (2.5% APY)
+   - Invest $1,000 every two weeks into VFV.TO
+   - Same period
+
+**What the calculator shows:**
+
+- **Comparison table**: Side-by-side metrics for all three strategies
+- **Best performer**: Automatically highlights which strategy has the highest return rate
+- **Visual comparison**: Interactive line chart showing how total value evolves over time for each strategy
+- **Detailed insights**:
+  - How much interest you earned on savings for each strategy
+  - How many shares you accumulated at different prices
+  - Your total return combining both savings interest and investment gains
+  - Daily breakdown via CSV export for deeper analysis
+
+This allows you to make an informed decision based on actual market data rather than just theory.
 
 ## 🛠️ Dependencies
 
 - **streamlit** (>=1.50.0) - Web app framework
-- **pandas** (>=2.3.3) - Data manipulation
-- **yfinance** (>=0.2.66) - Stock/ETF data fetching
+- **pandas** (>=2.3.3) - Data manipulation and analysis
+- **yfinance** (>=0.2.66) - Stock/ETF data fetching from Yahoo Finance
+- **plotly** (>=5.18.0) - Interactive charting and visualizations
 
 ## 🤝 Contributing
 
