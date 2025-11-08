@@ -66,14 +66,15 @@ def get_investment_interval_days(frequency: str) -> int:
     Convert investment frequency to number of days.
 
     Args:
-        frequency: One of 'Weekly', 'Biweekly', or 'Monthly'
+        frequency: One of 'Twice a week', 'Weekly', 'Every two weeks', or 'Monthly'
 
     Returns:
         Number of days between investments
     """
     freq_days = {
+        'Twice a week': 3.5,
         'Weekly': 7,
-        'Biweekly': 14,
+        'Every two weeks': 14,
         'Monthly': 30
     }
     return freq_days.get(frequency, 7)
@@ -171,6 +172,7 @@ def calculate_dca_returns(
     investment_dates = []
     savings_history = []
     portfolio_value_history = []
+    portfolio_value = 0.0  # Initialize portfolio value
 
     # Create date range
     start = pd.to_datetime(start_date)
@@ -218,11 +220,14 @@ def calculate_dca_returns(
         if investment_amount > 0:
             current_stock_price = get_stock_price(stock_data, current_date)
             if current_stock_price is not None:
+                # Trading day - update portfolio value
                 portfolio_value = total_shares * current_stock_price
-                portfolio_value_history.append({
-                    'date': current_date,
-                    'portfolio_value': portfolio_value
-                })
+            # If no stock price available (weekend/holiday), portfolio_value remains unchanged from previous day
+
+            portfolio_value_history.append({
+                'date': current_date,
+                'portfolio_value': portfolio_value
+            })
         else:
             # No investments, portfolio value is always 0
             portfolio_value_history.append({

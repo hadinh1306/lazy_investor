@@ -58,7 +58,7 @@ def display_main_interface():
             "Annual Savings Interest Rate (%)",
             min_value=0.0,
             max_value=100.0,
-            value=4.5,
+            value=2.5,
             step=0.1,
             format="%.2f",
             help="Annual interest rate (compounded daily)"
@@ -75,8 +75,8 @@ def display_main_interface():
 
         investment_frequency = st.selectbox(
             "Investment Frequency",
-            options=['Weekly', 'Biweekly', 'Monthly'],
-            index=0,
+            options=['Twice a week', 'Weekly', 'Every two weeks', 'Monthly'],
+            index=1,
             help="How often you invest"
         )
 
@@ -206,12 +206,12 @@ def display_scenario_comparison(saved_scenarios: dict):
 
     # Scenario selection for visualization
     st.subheader("📈 Total Value Over Time")
-    st.write("Select up to 3 scenarios to visualize:")
+    st.write("Select scenarios to visualize:")
 
     # Use session state to track selected scenarios
     if 'selected_for_chart' not in st.session_state:
-        # Default to first 3 scenarios
-        st.session_state['selected_for_chart'] = list(saved_scenarios.keys())[:min(3, len(saved_scenarios))]
+        # Default to all scenarios
+        st.session_state['selected_for_chart'] = list(saved_scenarios.keys())
 
     # Create checkboxes for each scenario
     selected_scenarios = []
@@ -219,14 +219,10 @@ def display_scenario_comparison(saved_scenarios: dict):
         # Check if this scenario should be checked
         is_checked = name in st.session_state['selected_for_chart']
 
-        # Disable checkbox if 3 are already selected and this one isn't checked
-        is_disabled = len(st.session_state['selected_for_chart']) >= 3 and not is_checked
-
         if st.checkbox(
             name,
             value=is_checked,
-            key=f"chart_select_{name}",
-            disabled=is_disabled
+            key=f"chart_select_{name}"
         ):
             selected_scenarios.append(name)
 
@@ -234,16 +230,46 @@ def display_scenario_comparison(saved_scenarios: dict):
     st.session_state['selected_for_chart'] = selected_scenarios
 
     if selected_scenarios:
-        if len(selected_scenarios) > 3:
-            st.warning("⚠️ Please select up to 3 scenarios only")
-        else:
-            display_comparison_chart(saved_scenarios, selected_scenarios)
+        display_comparison_chart(saved_scenarios, selected_scenarios)
+
+        # CSV Download section
+        st.subheader("📥 Download Daily Summary")
+
+        # Show column definitions
+        with st.expander("ℹ️ CSV Column Definitions"):
+            st.markdown("""
+            The CSV file contains the following columns for each selected scenario:
+
+            - **Date**: The calendar date (YYYY-MM-DD format)
+            - **Scenario**: The scenario name
+            - **Savings Balance**: Current balance in savings account
+            - **Daily Interest Earned**: Interest earned on that specific day
+            - **Cumulative Interest Earned**: Total interest earned since start
+            - **Investment Made**: Amount invested on that day (0 if no investment)
+            - **Stock Price**: Stock price on that day (null for weekends/holidays)
+            - **Shares Purchased**: Number of shares bought that day (0 if no investment)
+            - **Total Shares Owned**: Cumulative shares owned
+            - **Portfolio Value**: Current value of all shares owned
+            - **Total Final Value**: Savings Balance + Portfolio Value
+            - **Total Return**: Total Final Value - Initial Savings
+            - **Return Rate (%)**: (Total Return / Initial Savings) × 100
+            """)
+
+        # Generate and offer CSV download
+        csv_data = generate_csv_data(saved_scenarios, selected_scenarios)
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name="lazy_investor_daily_summary.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     else:
         st.info("Select at least one scenario to visualize")
 
 
 def display_comparison_chart(saved_scenarios: dict, selected_scenarios: list):
-    """Display interactive line chart comparing total value over time for selected scenarios."""
+    """Display interactive line chart comparing total final value over time for selected scenarios."""
     fig = go.Figure()
 
     for name in selected_scenarios:
@@ -254,19 +280,19 @@ def display_comparison_chart(saved_scenarios: dict, selected_scenarios: list):
         savings_history = pd.DataFrame(results['savings_history'])
         portfolio_history = pd.DataFrame(results['portfolio_value_history'])
 
-        # Merge and calculate total value
+        # Merge and calculate total final value (savings + portfolio)
         combined_df = savings_history.merge(portfolio_history, on='date', how='left')
         combined_df['portfolio_value'] = combined_df['portfolio_value'].fillna(0)
-        combined_df['total_value'] = combined_df['savings_balance'] + combined_df['portfolio_value']
+        combined_df['total_final_value'] = combined_df['savings_balance'] + combined_df['portfolio_value']
         combined_df['date'] = pd.to_datetime(combined_df['date'])
 
         # Format values for display
-        combined_df['formatted_value'] = combined_df['total_value'].apply(lambda x: f"${x:,.0f}")
+        combined_df['formatted_value'] = combined_df['total_final_value'].apply(lambda x: f"${x:,.0f}")
 
         # Add trace for this scenario
         fig.add_trace(go.Scatter(
             x=combined_df['date'],
-            y=combined_df['total_value'],
+            y=combined_df['total_final_value'],
             mode='lines',
             name=name,
             line=dict(width=2),
@@ -278,7 +304,7 @@ def display_comparison_chart(saved_scenarios: dict, selected_scenarios: list):
     # Update layout
     fig.update_layout(
         xaxis_title=None,
-        yaxis_title="Total Value ($)",
+        yaxis_title="Total Final Value ($)",
         hovermode='x unified',
         height=500,
         showlegend=True,
@@ -303,5 +329,121 @@ def display_comparison_chart(saved_scenarios: dict, selected_scenarios: list):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def generate_csv_data(saved_scenarios: dict, selected_scenarios: list) -> str:
+    """Generate CSV data for selected scenarios with comprehensive daily breakdown."""
+
+    # Combine data from all selected scenarios
+    all_data = []
+
+    for name in selected_scenarios:
+        scenario = saved_scenarios[name]
+        results = scenario['results']
+        params = scenario['params']
+
+        # Get daily history
+        savings_history = pd.DataFrame(results['savings_history'])
+        portfolio_history = pd.DataFrame(results['portfolio_value_history'])
+
+        # Create investment lookup - map dates to investment amounts and details
+        investment_lookup = {}
+        for inv in results['investment_dates']:
+            inv_date = pd.to_datetime(inv['date'])
+            investment_lookup[inv_date] = {
+                'amount': inv['amount'],
+                'price': inv['price'],
+                'shares': inv['shares']
+            }
+
+        # Merge the dataframes
+        combined_df = savings_history.merge(portfolio_history, on='date', how='left')
+        combined_df['portfolio_value'] = combined_df['portfolio_value'].fillna(0)
+        combined_df['date'] = pd.to_datetime(combined_df['date'])
+
+        # Calculate daily interest earned
+        combined_df['daily_interest_earned'] = combined_df['savings_balance'].diff()
+        combined_df.loc[0, 'daily_interest_earned'] = combined_df.loc[0, 'savings_balance'] - params['initial_savings']
+
+        # Adjust for withdrawals (when investment was made)
+        for idx, row in combined_df.iterrows():
+            if row['date'] in investment_lookup:
+                # On investment days, the difference includes the withdrawal
+                # So we need to add back the investment amount to get the true interest
+                combined_df.loc[idx, 'daily_interest_earned'] += investment_lookup[row['date']]['amount']
+
+        # Calculate cumulative interest earned
+        combined_df['cumulative_interest_earned'] = combined_df['daily_interest_earned'].cumsum()
+
+        # Add investment details
+        combined_df['investment_made'] = combined_df['date'].apply(
+            lambda d: investment_lookup[d]['amount'] if d in investment_lookup else 0
+        )
+        combined_df['stock_price'] = combined_df['date'].apply(
+            lambda d: investment_lookup[d]['price'] if d in investment_lookup else None
+        )
+        combined_df['shares_purchased'] = combined_df['date'].apply(
+            lambda d: investment_lookup[d]['shares'] if d in investment_lookup else 0
+        )
+
+        # Calculate cumulative shares owned
+        combined_df['total_shares_owned'] = combined_df['shares_purchased'].cumsum()
+
+        # Calculate total final value and total return for each day
+        combined_df['total_final_value'] = combined_df['savings_balance'] + combined_df['portfolio_value']
+        combined_df['total_return'] = combined_df['total_final_value'] - params['initial_savings']
+        combined_df['return_rate'] = (combined_df['total_return'] / params['initial_savings']) * 100
+
+        # Add scenario name
+        combined_df['scenario'] = name
+
+        # Select and reorder columns for CSV
+        csv_df = combined_df[[
+            'date',
+            'scenario',
+            'savings_balance',
+            'daily_interest_earned',
+            'cumulative_interest_earned',
+            'investment_made',
+            'stock_price',
+            'shares_purchased',
+            'total_shares_owned',
+            'portfolio_value',
+            'total_final_value',
+            'total_return',
+            'return_rate'
+        ]]
+
+        # Rename columns to match the definitions
+        csv_df = csv_df.rename(columns={
+            'date': 'Date',
+            'scenario': 'Scenario',
+            'savings_balance': 'Savings Balance',
+            'daily_interest_earned': 'Daily Interest Earned',
+            'cumulative_interest_earned': 'Cumulative Interest Earned',
+            'investment_made': 'Investment Made',
+            'stock_price': 'Stock Price',
+            'shares_purchased': 'Shares Purchased',
+            'total_shares_owned': 'Total Shares Owned',
+            'portfolio_value': 'Portfolio Value',
+            'total_final_value': 'Total Final Value',
+            'total_return': 'Total Return',
+            'return_rate': 'Return Rate (%)'
+        })
+
+        all_data.append(csv_df)
+
+    # Combine all scenarios
+    final_df = pd.concat(all_data, ignore_index=True)
+
+    # Sort by date ascending, then by scenario
+    final_df = final_df.sort_values(['Date', 'Scenario'], ascending=[True, True])
+
+    # Format date
+    final_df['Date'] = final_df['Date'].dt.strftime('%Y-%m-%d')
+
+    # Convert to CSV string
+    return final_df.to_csv(index=False)
+
+
 if __name__ == "__main__":
     main()
+
