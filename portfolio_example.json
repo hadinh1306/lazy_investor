@@ -1,0 +1,42 @@
+[
+  {
+    "ticker": "VTI",
+    "percentage": 30.0
+  },
+  {
+    "ticker": "QCN.TO",
+    "percentage": 21.0
+  },
+  {
+    "ticker": "IEFA",
+    "percentage": 17.0
+  },
+  {
+    "ticker": "GLOV",
+    "percentage": 11.0
+  },
+  {
+    "ticker": "ZCB.TO",
+    "percentage": 4.0
+  },
+  {
+    "ticker": "ZUAG.TO",
+    "percentage": 4.0
+  },
+  {
+    "ticker": "EEMV",
+    "percentage": 4.0
+  },
+  {
+    "ticker": "ZAG.TO",
+    "percentage": 5.0
+  },
+  {
+    "ticker": "GLDM",
+    "percentage": 3.0
+  },
+  {
+    "ticker": "ZHY.TO",
+    "percentage": 1.0
+  }
+]

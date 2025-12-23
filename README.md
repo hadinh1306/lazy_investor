@@ -36,6 +36,7 @@ This approach offers several benefits:
   - Unlimited tickers per portfolio
   - Automatic rebalancing on each investment
   - **Supports partial share purchases** for precise allocation
+  - **Import/Export portfolio via JSON** for easy sharing and backup
 - **Daily-compounded savings interest** calculation
 - **Real market data** from Yahoo Finance (supports any stock/ETF ticker)
 - **Flexible investment schedules** (twice a week, weekly, every two weeks, monthly)

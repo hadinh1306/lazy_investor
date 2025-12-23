@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
+import json
 
 from calculations import calculate_dca_returns
 
@@ -94,6 +95,51 @@ def display_main_interface():
 
         st.markdown("**Portfolio Structure**")
         st.caption("Add tickers and their allocation percentages. Total must equal 100%.")
+
+        # JSON Import/Export section
+        col1, col2 = st.columns(2)
+
+        with col1:
+            uploaded_file = st.file_uploader(
+                "Import from JSON",
+                type=['json'],
+                help="Upload a JSON file with portfolio structure",
+                label_visibility="collapsed",
+                key="json_uploader"
+            )
+            if uploaded_file is not None:
+                try:
+                    portfolio_json = json.load(uploaded_file)
+                    # Validate JSON structure
+                    if isinstance(portfolio_json, list):
+                        # Validate each item has ticker and percentage
+                        if all(isinstance(item, dict) and 'ticker' in item and 'percentage' in item
+                               for item in portfolio_json):
+                            st.session_state['portfolio_structure'] = portfolio_json
+                            st.success("✅ Portfolio loaded from JSON")
+                            st.rerun()
+                        else:
+                            st.error("Invalid JSON format. Each item must have 'ticker' and 'percentage' keys.")
+                    else:
+                        st.error("JSON must be a list of ticker objects.")
+                except json.JSONDecodeError:
+                    st.error("Invalid JSON file.")
+                except Exception as e:
+                    st.error(f"Error loading JSON: {str(e)}")
+
+        with col2:
+            if st.session_state.get('portfolio_structure'):
+                portfolio_json_str = json.dumps(
+                    st.session_state['portfolio_structure'],
+                    indent=2
+                )
+                st.download_button(
+                    label="Export to JSON",
+                    data=portfolio_json_str,
+                    file_name="portfolio_structure.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
 
         # Initialize portfolio structure in session state
         if 'portfolio_structure' not in st.session_state:
